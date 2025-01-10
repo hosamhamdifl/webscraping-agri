@@ -31,13 +31,52 @@ class AgribegriSpider(scrapy.Spider):
             
             # Extract product URL
             product_url = product.css('a::attr(href)').get()
-            
-            yield {
-                'name': product_name.strip() if product_name else None,
-                'quantity': quantity.strip() if quantity else None,
-                'notes': notes.strip() if notes else None,
-                'final_price': final_price.strip() if final_price else None,
-                'original_price': original_price.strip() if original_price else None,
-                'discount': discount if discount else None,
-                'url': product_url.strip() if product_url else None,
-            }
+
+            # Follow the product URL to scrape additional details
+            yield scrapy.Request(url=product_url, callback=self.parse_product_details, meta={
+                'product_name': product_name,
+                'quantity': quantity,
+                'notes': notes,
+                'final_price': final_price,
+                'original_price': original_price,
+                'discount': discount,
+                'url': product_url,
+            })
+
+    def parse_product_details(self, response):
+        # Extract additional product details from the individual product page
+
+        # Extract product description
+        description = response.css('div.prod_desc p span::text').getall()
+        description = " ".join([desc.strip() for desc in description])
+
+        # Extract company/manufacturer name and URL
+        company_name = response.css('div.manufacture_box a::text').get().strip() if response.css('div.manufacture_box a::text').get() else None
+        company_url = response.css('div.manufacture_box a::attr(href)').get()
+
+        # Extract product image URL
+        image_url = response.css('div.zoom-rt-box a img::attr(src)').get()
+
+        # Extract product units (21)
+        product_units = response.css('div.units_label::text').get()
+
+        # Extract product quantity options
+        product_quantity_options = response.css('div#divUnitscroll br::text').getall()
+        product_quantity_option_number = " / ".join([option.strip() for option in product_quantity_options if option.strip()])
+
+        # Yield the final result with all data
+        yield {
+            'name': response.meta['product_name'],
+            'quantity': response.meta['quantity'],
+            'notes': response.meta['notes'],
+            'final_price': response.meta['final_price'],
+            'original_price': response.meta['original_price'],
+            'discount': response.meta['discount'],
+            'url': response.meta['url'],
+            'description': description,
+            'company_name': company_name,
+            'company_url': company_url,
+            'image_url': image_url,
+            'product_units': product_units,
+            'product_quantity_option_number': product_quantity_option_number
+        }
